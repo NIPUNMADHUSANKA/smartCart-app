@@ -32,3 +32,11 @@ type UserResponse struct {
 	Token        string `json:"token"`
 	RefreshToken string `json:"refresh_token"`
 }
+
+type UserRegisterRes struct {
+	UserId    uuid.UUID `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updateded_at"`
+	FullName  string    `json:"full_name"`
+	Email     string    `json:"email"`
+}

@@ -11,6 +11,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+var DBPool *pgxpool.Pool
+
 func Connection() {
 
 	ctx := context.Background()
@@ -67,7 +69,7 @@ func Connection() {
 		log.Fatal("Unable to create connection pool:", err)
 	}
 
-	defer dbpool.Close()
+	DBPool = dbpool
 
 	err = dbpool.Ping(ctx)
 

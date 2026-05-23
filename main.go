@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"smartCart-app/database"
+	"smartCart-app/routes"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -18,6 +19,8 @@ func main() {
 			"message": "Hello, World!",
 		})
 	})
+
+	routes.SetupUnProtectedRoutes(router)
 
 	if err := router.Listen(":8080"); err != nil {
 		log.Fatal("Failed to Start Server", err)
