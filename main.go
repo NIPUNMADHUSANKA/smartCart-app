@@ -21,6 +21,13 @@ func main() {
 	})
 
 	routes.SetupUnProtectedRoutes(router)
+	routes.SetupProtectedRoutes(router)
+
+	router.All("*", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"message": "404 or fallback route",
+		})
+	})
 
 	if err := router.Listen(":8080"); err != nil {
 		log.Fatal("Failed to Start Server", err)

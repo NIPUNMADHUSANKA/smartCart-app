@@ -56,14 +56,14 @@ type ShoppingItem struct {
 }
 
 type Category struct {
-	CategoryId    uuid.UUID      `json:"category_id" validate:"required"`
+	CategoryId    uuid.UUID      `json:"category_id"`
 	CategoryName  string         `json:"category_name" validate:"required"`
-	Description   string         `json:"description" validate:"required,min=2,max=500"`
+	Description   string         `json:"description"`
 	Status        CategoryStatus `json:"status" validate:"oneof=active completed"`
-	UserId        string         `json:"user_id" validate:"required"`
+	UserId        string         `json:"user_id"`
 	Icon          string         `json:"icon" validate:"required"`
 	Priority      PriorityStatus `json:"priority" validate:"oneof=normal low medium high"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updateded_at"`
-	ShoppingItems []ShoppingItem `json:"shopping_items" validate:"required,dive"`
+	ShoppingItems []ShoppingItem `json:"shopping_items"`
 }

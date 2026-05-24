@@ -7,5 +7,8 @@ import (
 )
 
 func SetupUnProtectedRoutes(router *fiber.App) {
-	router.Post("/signup", controllers.RegisterUser())
+
+	router.Post("/api/smart-cart/auth/register", controllers.RegisterUser())
+	router.Post("/api/smart-cart/auth/login", controllers.LoginUser())
+
 }

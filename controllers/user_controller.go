@@ -4,6 +4,7 @@ import (
 	"context"
 	"smartCart-app/database"
 	"smartCart-app/models"
+	"smartCart-app/utils"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -55,7 +56,7 @@ func RegisterUser() fiber.Handler {
 
 		qderr := database.DBPool.QueryRow(
 			ctx,
-			"SELECT EXISTS(SELECT 1 FROM \"User\" WHERE \"userName\" = $1 OR \"email\" = $2)",
+			`SELECT EXISTS(SELECT 1 FROM "User" WHERE "userName" = $1 OR "email" = $2)`,
 			user.UserName, user.Email,
 		).Scan(&exists)
 
@@ -98,5 +99,85 @@ func RegisterUser() fiber.Handler {
 		}
 
 		return c.Status(fiber.StatusCreated).JSON(userRes)
+	}
+}
+
+func LoginUser() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
+		defer cancel()
+
+		var UserLogin models.UserLogin
+
+		if err := c.BodyParser(&UserLogin); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid input data",
+			})
+		}
+
+		if err := validate.Struct(UserLogin); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error":   "Validation Failed",
+				"details": err.Error(),
+			})
+		}
+
+		var foundUser models.User
+
+		err := database.DBPool.QueryRow(
+			ctx,
+			`SELECT "userId","fullName","userName","email","password","role"
+     FROM "User" WHERE "userName" = $1`,
+			UserLogin.UserName,
+		).Scan(
+			&foundUser.UserID,
+			&foundUser.FullName,
+			&foundUser.UserName,
+			&foundUser.Email,
+			&foundUser.Password,
+			&foundUser.Role,
+		)
+
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		err = bcrypt.CompareHashAndPassword([]byte(foundUser.Password), []byte(UserLogin.Password))
+
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Invalid username or password",
+			})
+		}
+
+		token, refreshToken, err := utils.GernerateAllTokens(foundUser.UserID, foundUser.UserName, foundUser.Email, foundUser.FullName, foundUser.Role)
+
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		err = utils.UpdateAllTokend(foundUser.UserName, token, refreshToken)
+
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to update tokens",
+			})
+		}
+
+		var response models.UserResponse = models.UserResponse{
+			UserId:       foundUser.UserID,
+			FullName:     foundUser.FullName,
+			Email:        foundUser.Email,
+			Role:         foundUser.Role,
+			Token:        token,
+			RefreshToken: refreshToken,
+		}
+
+		return c.Status(fiber.StatusOK).JSON(response)
+
 	}
 }
