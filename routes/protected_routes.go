@@ -23,11 +23,11 @@ func SetupProtectedRoutes(router *fiber.App) {
 	router.Get("/api/smart-cart/shopping-item", controllers.GetShoppingItems())
 	router.Get("/api/smart-cart/shopping-item/:itemId", controllers.GetShoppingItemByItemId())
 	router.Get("/api/smart-cart/shopping-item/:categoryId", controllers.GetShoppingItemByCategoryId())
-	router.Get("/api/smart-cart/shopping-item/:itemId", controllers.DeleteShoppingItemByItemId())
+	router.Delete("/api/smart-cart/shopping-item/:itemId", controllers.DeleteShoppingItemByItemId())
+	router.Post("/api/smart-cart/shopping-item", controllers.CreateShoppingItems())
 
 	/*
-		13
-			export const SAVE_SHOPPING_ITEM = `${host}/api/smart-cart/shopping-item`;
+		11
 			export const UPDATE_SHOPPING_ITEM = `${host}/api/smart-cart/shopping-item/:itemId`;
 
 			export const GENERATE_AI_PROMPT = `${host}/api/smart-cart/ai-model`;

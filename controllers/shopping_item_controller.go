@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -232,5 +233,49 @@ func DeleteShoppingItemByItemId() fiber.Handler {
 			"message":       "Shopping Item deleted successfully",
 			"shopping_item": deletedShoppingItem,
 		})
+	}
+}
+
+func CreateShoppingItems() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
+		defer cancel()
+
+		var shoppingItem models.ShoppingItem
+
+		if err := c.BodyParser(&shoppingItem); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid input data",
+			})
+		}
+
+		shoppingItem.ItemId = uuid.New()
+		shoppingItem.CreatedAt = time.Now()
+		shoppingItem.UpdatedAt = time.Now()
+
+		err := database.DBPool.QueryRow(
+			ctx,
+			`INSERT INTO "shoppingItem" ("ItemId", "ItemName", "Description", "Status", "CategoryId", "Priority", "CreatedAt", "UpdatedAt", "Quantity", "Unit")
+			VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			RETURNING "ItemId"`,
+			shoppingItem.ItemId,
+			shoppingItem.ItemName,
+			shoppingItem.Description,
+			shoppingItem.Status,
+			shoppingItem.CategoryId,
+			shoppingItem.Priority,
+			shoppingItem.CreatedAt,
+			shoppingItem.UpdatedAt,
+			shoppingItem.Quantity,
+			shoppingItem.Unit,
+		).Scan(&shoppingItem.ItemId)
+
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to create Shopping Item",
+			})
+		}
+
+		return c.Status(fiber.StatusCreated).JSON(shoppingItem)
 	}
 }
