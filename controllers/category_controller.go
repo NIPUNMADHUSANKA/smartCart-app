@@ -238,3 +238,87 @@ func CreateCategory() fiber.Handler {
 		return c.Status(fiber.StatusCreated).JSON(category)
 	}
 }
+
+func UpdateCategory() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
+		defer cancel()
+
+		categoryId := c.Params("categoryId")
+		if categoryId == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "categoryId is not found",
+			})
+		}
+
+		var category models.Category
+
+		if err := c.BodyParser(&category); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid input data",
+			})
+		}
+
+		if err := validate.Struct(category); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error":   "Validation Failed",
+				"details": err.Error(),
+			})
+		}
+
+		userIdInterface := c.Locals("userId")
+		userId, ok := userIdInterface.(string)
+		if !ok || userId == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "userId not found",
+			})
+		}
+
+		var updatedCategory models.Category
+
+		err := database.DBPool.QueryRow(
+			ctx,
+			`UPDATE "Category"
+			SET "categoryName" = $1,
+			    "description" = $2,
+			    "status" = $3,
+			    "icon" = $4,
+			    "priority" = $5,
+			    "updatedAt" = $6
+			WHERE "userId" = $7
+			  AND "categoryId" = $8
+			RETURNING "categoryId", "categoryName", "description", "status", "userId", "icon", "priority", "createdAt", "updatedAt"`,
+			category.CategoryName,
+			category.Description,
+			category.Status,
+			category.Icon,
+			category.Priority,
+			time.Now(),
+			userId,
+			categoryId,
+		).Scan(
+			&updatedCategory.CategoryId,
+			&updatedCategory.CategoryName,
+			&updatedCategory.Description,
+			&updatedCategory.Status,
+			&updatedCategory.UserId,
+			&updatedCategory.Icon,
+			&updatedCategory.Priority,
+			&updatedCategory.CreatedAt,
+			&updatedCategory.UpdatedAt,
+		)
+
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "Category not found",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to update category",
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(updatedCategory)
+	}
+}

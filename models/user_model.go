@@ -24,6 +24,11 @@ type UserLogin struct {
 	Password string `json:"password" validate:"required,min=6"`
 }
 
+type PasswordUpdate struct {
+	Password    string `json:"password" validate:"required,min=6"`
+	NewPassword string `json:"new_password" validate:"required,min=6"`
+}
+
 type UserResponse struct {
 	UserId       uuid.UUID `json:"user_id"`
 	FullName     string    `json:"full_name"`

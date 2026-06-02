@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"smartCart-app/database"
 	"smartCart-app/models"
 	"smartCart-app/utils"
@@ -10,6 +11,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,6 +23,74 @@ func HashPassword(password string) (string, error) {
 		return "", err
 	}
 	return string(HashPassword), nil
+}
+
+func ResetPassword() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
+		defer cancel()
+
+		userIdInterface := c.Locals("userId")
+		userIdStr, ok := userIdInterface.(string)
+		if !ok || userIdStr == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON((fiber.Map{
+				"error": "UserId not found",
+			}))
+		}
+
+		var passwordupdate models.PasswordUpdate
+
+		if err := c.BodyParser(&passwordupdate); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid input data",
+			})
+		}
+
+		if err := validate.Struct(passwordupdate); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error":   "Validation Failed",
+				"details": err.Error(),
+			})
+		}
+
+		var storedPassword string
+		err := database.DBPool.QueryRow(
+			ctx,
+			`SELECT "password" FROM "User" WHERE "userId" = $1`,
+			userIdStr,
+		).Scan(&storedPassword)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return fmt.Errorf("user not found")
+			}
+			return err
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(passwordupdate.Password)); err != nil {
+			return fmt.Errorf("invalid password")
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(passwordupdate.NewPassword)); err == nil {
+			return fmt.Errorf("new password must be different from current password")
+		}
+
+		hashedPassword, err := HashPassword(passwordupdate.NewPassword)
+		if err != nil {
+			return err
+		}
+
+		_, err = database.DBPool.Exec(
+			ctx,
+			`UPDATE "User" SET "password" = $1, "updatedAt" = $2 WHERE "userId" = $3`,
+			hashedPassword, time.Now(), userIdStr,
+		)
+		if err != nil {
+			return err
+		}
+
+		return nil
+
+	}
 }
 
 func RegisterUser() fiber.Handler {
@@ -181,3 +251,142 @@ func LoginUser() fiber.Handler {
 
 	}
 }
+
+func GetUserInfo() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+
+		userIdInterface := c.Locals("userId")
+		userId, ok := userIdInterface.(string)
+
+		if !ok || userId == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON((fiber.Map{
+				"error": "UserId not found",
+			}))
+		}
+
+		userName := c.Locals("userName")
+
+		if userName == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "UserName not found",
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"userId":   userId,
+			"userName": userName,
+		})
+
+	}
+}
+
+func GetUserDetails() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
+
+		userIdInterface := c.Locals("userId")
+		userIdStr, ok := userIdInterface.(string)
+		if !ok || userIdStr == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON((fiber.Map{
+				"error": "UserId not found",
+			}))
+		}
+
+		userNameInterface := c.Locals("userName")
+		userName, ok := userNameInterface.(string)
+		if !ok || userName == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "UserName not found",
+			})
+		}
+
+		parsedUserID, err := uuid.Parse(userIdStr)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Invalid user ID",
+			})
+		}
+
+		var foundUser models.User
+
+		err = database.DBPool.QueryRow(
+			ctx,
+			`SELECT "fullName","email","role", "token", "refreshToken", "createdAt", "updatedAt"
+      		FROM "User" WHERE "userName" = $1 and "userId" = $2`,
+			userName, parsedUserID,
+		).Scan(
+			&foundUser.FullName,
+			&foundUser.Email,
+			&foundUser.Role,
+			&foundUser.Token,
+			&foundUser.RefreshToken,
+			&foundUser.CreatedAt,
+			&foundUser.UpdatedAt,
+		)
+
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		var response models.User = models.User{
+			UserID:       parsedUserID,
+			UserName:     userName,
+			FullName:     foundUser.FullName,
+			Email:        foundUser.Email,
+			Role:         foundUser.Role,
+			Token:        foundUser.Token,
+			RefreshToken: foundUser.RefreshToken,
+			CreatedAt:    foundUser.CreatedAt,
+			UpdatedAt:    foundUser.UpdatedAt,
+		}
+		return c.Status(fiber.StatusOK).JSON(response)
+
+	}
+
+}
+
+/*
+func DeleteUser() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
+		defer cancel()
+
+		var exists bool
+
+		userIdInterface := c.Locals("userId")
+		userIdStr, ok := userIdInterface.(string)
+		if !ok || userIdStr == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON((fiber.Map{
+				"error": "UserId not found",
+			}))
+		}
+
+		parsedUserID, err := uuid.Parse(userIdStr)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Invalid user ID",
+			})
+		}
+
+		qderr := database.DBPool.QueryRow(
+			ctx,
+			`SELECT EXISTS(SELECT 1 FROM "User" WHERE "userId" = $1)`,
+			parsedUserID,
+		).Scan(&exists)
+
+		if qderr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to check existing user",
+			})
+		}
+
+		if exists {
+
+		}
+
+	}
+}*/
