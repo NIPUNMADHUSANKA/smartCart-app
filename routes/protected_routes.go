@@ -25,10 +25,10 @@ func SetupProtectedRoutes(router *fiber.App) {
 	router.Get("/api/smart-cart/shopping-item/:categoryId", controllers.GetShoppingItemByCategoryId())
 	router.Delete("/api/smart-cart/shopping-item/:itemId", controllers.DeleteShoppingItemByItemId())
 	router.Post("/api/smart-cart/shopping-item", controllers.CreateShoppingItems())
+	router.Patch("/api/smart-cart/shopping-item/:itemId", controllers.UpdateShoppingItem())
 
 	/*
 		11
-			export const UPDATE_SHOPPING_ITEM = `${host}/api/smart-cart/shopping-item/:itemId`;
 
 			export const GENERATE_AI_PROMPT = `${host}/api/smart-cart/ai-model`;
 			export const GET_ALL_AI_CATEGORY = `${host}/api/smart-cart/ai-model`;

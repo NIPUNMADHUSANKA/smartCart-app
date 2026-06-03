@@ -279,3 +279,109 @@ func CreateShoppingItems() fiber.Handler {
 		return c.Status(fiber.StatusCreated).JSON(shoppingItem)
 	}
 }
+
+func UpdateShoppingItem() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
+		defer cancel()
+
+		shoppingItemId := c.Params("itemId")
+		if shoppingItemId == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Shopping Item Id not found",
+			})
+		}
+
+		var shoppingItem models.ShoppingItem
+
+		if err := c.BodyParser(&shoppingItem); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid input data",
+			})
+		}
+
+		itemUUID, err := uuid.Parse(shoppingItemId)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid shopping item id",
+			})
+		}
+
+		shoppingItem.ItemId = itemUUID
+
+		if err := validate.Struct(shoppingItem); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error":   "Validation Failed",
+				"details": err.Error(),
+			})
+		}
+
+		userIdInterface := c.Locals("userId")
+		userId, ok := userIdInterface.(string)
+
+		if !ok || userId == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "UserId not found",
+			})
+		}
+
+		var updatedCategory models.ShoppingItem
+
+		err = database.DBPool.QueryRow(
+			ctx,
+			`UPDATE "shoppingItem" si
+			SET "ItemName" = $1,
+			    "Description" = $2,
+			    "Status" = $3,
+			    "CategoryId" = $4,
+			    "Priority" = $5,
+			    "UpdatedAt" = $6,
+			    "Quantity" = $7,
+			    "Unit" = $8
+			FROM "Category" c
+			WHERE si."CategoryId" = c."categoryId"
+			  AND c."userId" = $9
+			  AND si."ItemId" = $10
+			  AND EXISTS (
+			      SELECT 1 FROM "Category" c2
+			      WHERE c2."categoryId" = $4
+			        AND c2."userId" = $9
+			  )
+			RETURNING si."ItemId", si."ItemName", si."Description", si."Status", si."CategoryId", si."Priority", si."CreatedAt", si."UpdatedAt", si."Quantity", si."Unit`,
+			shoppingItem.ItemName,
+			shoppingItem.Description,
+			shoppingItem.Status,
+			shoppingItem.CategoryId,
+			shoppingItem.Priority,
+			time.Now(),
+			shoppingItem.Quantity,
+			shoppingItem.Unit,
+			userId,
+			itemUUID,
+		).Scan(
+			&updatedCategory.ItemId,
+			&updatedCategory.ItemName,
+			&updatedCategory.Description,
+			&updatedCategory.Status,
+			&updatedCategory.CategoryId,
+			&updatedCategory.Priority,
+			&updatedCategory.CreatedAt,
+			&updatedCategory.UpdatedAt,
+			&updatedCategory.Quantity,
+			&updatedCategory.Unit,
+		)
+
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "Shopping Item not found",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to update shopping item",
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(updatedCategory)
+	}
+}
