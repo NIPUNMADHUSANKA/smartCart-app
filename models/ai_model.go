@@ -2,11 +2,9 @@ package models
 
 import (
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type AiSuggestion struct {
-	gorm.Model
 	Id         uuid.UUID    `json:"id"`
 	UserId     string       `json:"user_id" validate:"required,uuid4"`
 	Prompt     string       `json:"prompt" validate:"required"`
@@ -14,7 +12,6 @@ type AiSuggestion struct {
 }
 
 type AICategory struct {
-	gorm.Model
 	Id           uuid.UUID      `json:"id"`
 	SuggestionId string         `json:"suggestion_id" validate:"required,uuid4"`
 	CategoryName string         `json:"category_name" validate:"required"`
@@ -23,7 +20,6 @@ type AICategory struct {
 }
 
 type AIItem struct {
-	gorm.Model
 	Id         uuid.UUID      `json:"id"`
 	CategoryId string         `json:"category_id" validate:"required,uuid4"`
 	ItemName   string         `json:"item_name" validate:"required"`

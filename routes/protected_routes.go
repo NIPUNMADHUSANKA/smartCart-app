@@ -27,19 +27,18 @@ func SetupProtectedRoutes(router *fiber.App) {
 	router.Post("/api/smart-cart/shopping-item", controllers.CreateShoppingItems())
 	router.Patch("/api/smart-cart/shopping-item/:itemId", controllers.UpdateShoppingItem())
 
+	router.Get("/api/smart-cart/ai-model", controllers.GetAllAICategory())
+	router.Delete("/api/smart-cart/ai-model/:categoryId", controllers.DeleteAICategory())
+	router.Delete("/api/smart-cart/ai-model/deleteAISuggestion/:suggestionId", controllers.DeleteAISuggestion())
+	router.Delete("/api/smart-cart/ai-model/deleteAIShoppingItem/:categoryId/:itemId", controllers.DeleteAIShoppingItem())
+	router.Post("/api/smart-cart/ai-model/updateAIShoppingItem", controllers.UpdateAIShoppingItem())
+	router.Post("/api/smart-cart/ai-model/confirmAIShopping", controllers.ConfirmAICategory())
+	router.Post("/api/smart-cart/ai-model/addAIShoppingItem", controllers.AddAIShoppingItem())
+	router.Post("/api/smart-cart/ai-model", controllers.GenetateAIPrompt())
+	router.Post("/api/smart-cart/ai-model/regenerateAIShopping/:suggestionId", controllers.ReGenetateAIPrompt())
+
 	/*
-		11
-
-			export const GENERATE_AI_PROMPT = `${host}/api/smart-cart/ai-model`;
-			export const GET_ALL_AI_CATEGORY = `${host}/api/smart-cart/ai-model`;
-			export const DELETE_AI_CATEGORY = `${host}/api/smart-cart/ai-model/:categoryId`;
-			export const DELETE_AI_ALL_CATEGORY = `${host}/api/smart-cart/ai-model/deleteAISuggestion/:suggestionId`;
-			export const DELETE_AI_SHOPPING_ITEM = `${host}/api/smart-cart/ai-model/deleteAIShoppingItem/:categoryId/:itemId`;
-			export const UPDATE_AI_SHOPPING_ITEM = `${host}/api/smart-cart/ai-model/updateAIShoppingItem`;
-			export const REGENERATE_AI_PROMPT = `${host}/api/smart-cart/ai-model/regenerateAIShopping`;
-			export const CONFIRM_AI_CATEGORY = `${host}/api/smart-cart/ai-model/confirmAIShopping`;
-			export const ADD_AI_SHOPPING_ITEM = `${host}/api/smart-cart/ai-model/addAIShoppingItem`;
-
+		1
 			export const REMOVE_USER = `${host}/api/smart-cart/auth/remove`;
 
 	*/
