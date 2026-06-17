@@ -22,6 +22,7 @@ func SetupProtectedRoutes(router *fiber.App) {
 	api.Get("auth/me", controllers.GetUserInfo())
 	api.Get("auth/info", controllers.GetUserDetails())
 	api.Post("auth/resetPassword", controllers.ResetPassword())
+	api.Delete("auth/remove", controllers.DeleteUser())
 
 	api.Get("shopping-item", controllers.GetShoppingItems())
 	api.Get("shopping-item/:itemId", controllers.GetShoppingItemByItemId())
@@ -39,10 +40,4 @@ func SetupProtectedRoutes(router *fiber.App) {
 	api.Post("ai-model/addAIShoppingItem", controllers.AddAIShoppingItem())
 	api.Post("ai-model", controllers.GenetateAIPrompt())
 	api.Post("ai-model/regenerateAIShopping/:suggestionId", controllers.ReGenetateAIPrompt())
-
-	/*
-		1
-			export const REMOVE_USER = `${host}/api/smart-cart/auth/remove`;
-
-	*/
 }

@@ -349,13 +349,10 @@ func GetUserDetails() fiber.Handler {
 
 }
 
-/*
 func DeleteUser() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 		defer cancel()
-
-		var exists bool
 
 		userIdInterface := c.Locals("userId")
 		userIdStr, ok := userIdInterface.(string)
@@ -365,28 +362,102 @@ func DeleteUser() fiber.Handler {
 			}))
 		}
 
-		parsedUserID, err := uuid.Parse(userIdStr)
+		// Channel to collect errors from concurrent operations
+		errChan := make(chan error, 5)
+
+		// Delete AI items concurrently
+		go func() {
+			_, err := database.DBPool.Exec(ctx,
+				`DELETE FROM "AIItem"
+				WHERE "categoryId" IN (
+					SELECT "id"
+					FROM "AICategory"
+					WHERE "suggestionId" IN (
+						SELECT "id"
+						FROM "AiSuggestion"
+						WHERE "userId" = $1
+					)
+				)`,
+				userIdStr,
+			)
+			errChan <- err
+		}()
+
+		// Delete shopping items concurrently
+		go func() {
+			_, err := database.DBPool.Exec(ctx,
+				`DELETE FROM "shoppingItem" si
+				USING "Category" c
+				WHERE si."CategoryId" = c."categoryId"
+				AND c."userId" = $1`,
+				userIdStr,
+			)
+			errChan <- err
+		}()
+
+		// Delete AI categories concurrently
+		go func() {
+			_, err := database.DBPool.Exec(ctx,
+				`DELETE FROM "AICategory"
+				WHERE "suggestionId" IN (
+					SELECT "id"
+					FROM "AiSuggestion"
+					WHERE "userId" = $1
+				)`,
+				userIdStr,
+			)
+			errChan <- err
+		}()
+
+		// Delete AI suggestions concurrently
+		go func() {
+			_, err := database.DBPool.Exec(ctx,
+				`DELETE FROM "AiSuggestion"
+				WHERE "userId" = $1`,
+				userIdStr,
+			)
+			errChan <- err
+		}()
+
+		// Delete categories concurrently
+		go func() {
+			_, err := database.DBPool.Exec(ctx,
+				`DELETE FROM "Category"
+				WHERE "userId" = $1`,
+				userIdStr,
+			)
+			errChan <- err
+		}()
+
+		// Collect errors from concurrent operations
+		for i := 0; i < 5; i++ {
+			if err := <-errChan; err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "Failed to delete user related data",
+				})
+			}
+		}
+
+		// Finally, delete the user record
+		res, err := database.DBPool.Exec(ctx,
+			`DELETE FROM "User"
+			WHERE "userId" = $1`,
+			userIdStr,
+		)
 		if err != nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Invalid user ID",
-			})
-		}
-
-		qderr := database.DBPool.QueryRow(
-			ctx,
-			`SELECT EXISTS(SELECT 1 FROM "User" WHERE "userId" = $1)`,
-			parsedUserID,
-		).Scan(&exists)
-
-		if qderr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Failed to check existing user",
+				"error": "Failed to delete user",
 			})
 		}
 
-		if exists {
-
+		if res.RowsAffected() == 0 {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "User not found",
+			})
 		}
 
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"message": "User and all related data deleted successfully",
+		})
 	}
-}*/
+}
