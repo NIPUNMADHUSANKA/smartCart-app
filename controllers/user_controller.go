@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"smartCart-app/database"
 	"smartCart-app/models"
 	"smartCart-app/utils"
@@ -61,17 +60,23 @@ func ResetPassword() fiber.Handler {
 		).Scan(&storedPassword)
 		if err != nil {
 			if err == pgx.ErrNoRows {
-				return fmt.Errorf("user not found")
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "User does not found",
+				})
 			}
 			return err
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(passwordupdate.Password)); err != nil {
-			return fmt.Errorf("invalid password")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Current Password is Invalid",
+			})
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(passwordupdate.NewPassword)); err == nil {
-			return fmt.Errorf("new password must be different from current password")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "New Password must be different from Current Password",
+			})
 		}
 
 		hashedPassword, err := HashPassword(passwordupdate.NewPassword)
@@ -106,6 +111,8 @@ func RegisterUser() fiber.Handler {
 				"error": "Invalid input data",
 			})
 		}
+
+		user.Role = "USER"
 
 		if err := validate.Struct(user); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -148,10 +155,10 @@ func RegisterUser() fiber.Handler {
 
 		err = database.DBPool.QueryRow(
 			ctx,
-			`INSERT INTO "User" ("userId","fullName", "userName", "email", "password", "createdAt", "updatedAt")
-			VALUES($1, $2, $3, $4, $5, $6, $7)
+			`INSERT INTO "User" ("userId","fullName", "userName", "email", "password", "createdAt", "updatedAt", "role")
+			VALUES($1, $2, $3, $4, $5, $6, $7, $8)
 			RETURNING "userId"`,
-			userID, user.FullName, user.UserName, user.Email, user.Password, user.CreatedAt, user.UpdatedAt,
+			userID, user.FullName, user.UserName, user.Email, user.Password, user.CreatedAt, user.UpdatedAt, user.Role,
 		).Scan(&userID)
 
 		if err != nil {
@@ -162,6 +169,7 @@ func RegisterUser() fiber.Handler {
 
 		var userRes models.UserRegisterRes = models.UserRegisterRes{
 			UserId:    userID,
+			UserName:  user.UserName,
 			FullName:  user.FullName,
 			Email:     user.Email,
 			CreatedAt: user.CreatedAt,
@@ -200,7 +208,7 @@ func LoginUser() fiber.Handler {
      FROM "User" WHERE "userName" = $1`,
 			UserLogin.UserName,
 		).Scan(
-			&foundUser.UserID,
+			&foundUser.UserId,
 			&foundUser.FullName,
 			&foundUser.UserName,
 			&foundUser.Email,
@@ -222,7 +230,7 @@ func LoginUser() fiber.Handler {
 			})
 		}
 
-		token, refreshToken, err := utils.GernerateAllTokens(foundUser.UserID, foundUser.UserName, foundUser.Email, foundUser.FullName, foundUser.Role)
+		token, refreshToken, err := utils.GernerateAllTokens(foundUser.UserId, foundUser.UserName, foundUser.Email, foundUser.FullName, foundUser.Role)
 
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -239,10 +247,8 @@ func LoginUser() fiber.Handler {
 		}
 
 		var response models.UserResponse = models.UserResponse{
-			UserId:       foundUser.UserID,
-			FullName:     foundUser.FullName,
-			Email:        foundUser.Email,
-			Role:         foundUser.Role,
+			UserId:       foundUser.UserId,
+			UserName:     foundUser.UserName,
 			Token:        token,
 			RefreshToken: refreshToken,
 		}
@@ -266,7 +272,7 @@ func GetUserInfo() fiber.Handler {
 
 		userName := c.Locals("userName")
 
-		if userName == "" {
+		if userName == "" || userName == nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "UserName not found",
 			})
@@ -332,16 +338,13 @@ func GetUserDetails() fiber.Handler {
 			})
 		}
 
-		var response models.User = models.User{
-			UserID:       parsedUserID,
-			UserName:     userName,
-			FullName:     foundUser.FullName,
-			Email:        foundUser.Email,
-			Role:         foundUser.Role,
-			Token:        foundUser.Token,
-			RefreshToken: foundUser.RefreshToken,
-			CreatedAt:    foundUser.CreatedAt,
-			UpdatedAt:    foundUser.UpdatedAt,
+		var response models.UserInfo = models.UserInfo{
+			UserId:    parsedUserID,
+			UserName:  userName,
+			FullName:  foundUser.FullName,
+			Email:     foundUser.Email,
+			CreatedAt: foundUser.CreatedAt,
+			UpdatedAt: foundUser.UpdatedAt,
 		}
 		return c.Status(fiber.StatusOK).JSON(response)
 

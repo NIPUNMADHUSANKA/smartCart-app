@@ -7,41 +7,49 @@ import (
 )
 
 type User struct {
-	UserID       uuid.UUID `json:"user_id"`
-	FullName     string    `json:"full_name" validate:"required,min=2,max=100"`
-	UserName     string    `json:"user_name" validate:"required,min=2,max=100"`
+	UserId       uuid.UUID `json:"userId"`
+	FullName     string    `json:"fullName" validate:"required,min=2,max=100"`
+	UserName     string    `json:"userName" validate:"required,min=2,max=100"`
 	Email        string    `json:"email" validate:"required,email"`
 	Password     string    `json:"password" validate:"required,min=6"`
 	Role         string    `json:"role" validate:"oneof=ADMIN USER"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updateded_at"`
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	Token        string    `json:"accessToken"`
+	RefreshToken string    `json:"refreshToken"`
 }
 
 type UserLogin struct {
-	UserName string `json:"user_name" validate:"required,min=2,max=100"`
+	UserName string `json:"userName" validate:"required,min=2,max=100"`
 	Password string `json:"password" validate:"required,min=6"`
 }
 
 type PasswordUpdate struct {
-	Password    string `json:"password" validate:"required,min=6"`
-	NewPassword string `json:"new_password" validate:"required,min=6"`
+	Password    string `json:"currentPassword" validate:"required,min=6"`
+	NewPassword string `json:"newPassword" validate:"required,min=6"`
 }
 
 type UserResponse struct {
-	UserId       uuid.UUID `json:"user_id"`
-	FullName     string    `json:"full_name"`
-	Email        string    `json:"email"`
-	Role         string    `json:"role"`
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token"`
+	UserId       uuid.UUID `json:"userId"`
+	UserName     string    `json:"userName"`
+	Token        string    `json:"accessToken"`
+	RefreshToken string    `json:"refreshToken"`
 }
 
 type UserRegisterRes struct {
-	UserId    uuid.UUID `json:"user_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updateded_at"`
-	FullName  string    `json:"full_name"`
+	UserId    uuid.UUID `json:"userId"`
+	UserName  string    `json:"userName"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	FullName  string    `json:"fullName"`
+	Email     string    `json:"email"`
+}
+
+type UserInfo struct {
+	UserId    uuid.UUID `json:"userId"`
+	UserName  string    `json:"userName"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	FullName  string    `json:"fullName"`
 	Email     string    `json:"email"`
 }

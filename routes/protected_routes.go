@@ -9,7 +9,6 @@ import (
 
 func SetupProtectedRoutes(router *fiber.App) {
 	router.Use(middleware.AuthMiddlware())
-	router.Use(middleware.RateLimiting())
 
 	api := router.Group("/api/smart-cart/")
 
@@ -21,7 +20,9 @@ func SetupProtectedRoutes(router *fiber.App) {
 
 	api.Get("auth/me", controllers.GetUserInfo())
 	api.Get("auth/info", controllers.GetUserDetails())
-	api.Post("auth/resetPassword", controllers.ResetPassword())
+	api.Patch("auth/resetPassword", controllers.ResetPassword())
+
+	//16
 	api.Delete("auth/remove", controllers.DeleteUser())
 
 	api.Get("shopping-item", controllers.GetShoppingItems())
