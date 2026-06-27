@@ -14,30 +14,29 @@ import (
 var DBPool *pgxpool.Pool
 
 func Connection() {
-
 	ctx := context.Background()
 	err := godotenv.Load(".env")
 
 	if err != nil {
-		log.Fatal("Warning: unable to found .env file")
+		log.Printf("No .env file loaded, using runtime environment variables: %v", err)
 	}
 
 	DATABASE_URL := os.Getenv("DATABASE_URL")
 
 	if DATABASE_URL == "" {
-		log.Fatal("Warning: unable to found the DATABASE URL")
+		log.Fatal("DATABASE_URL is not configured")
 	}
 
 	MAX_CONNS := os.Getenv("MAX_CONNS")
 
 	if MAX_CONNS == "" {
-		log.Fatal("Warning: unable to found the MAX_CONNS")
+		log.Fatal("MAX_CONNS is not configured")
 	}
 
 	MIN_CONNS := os.Getenv("MIN_CONNS")
 
 	if MIN_CONNS == "" {
-		log.Fatal("Warning: unable to found the MIN_CONNS")
+		log.Fatal("MIN_CONNS is not configured")
 	}
 
 	config, err := pgxpool.ParseConfig(DATABASE_URL)

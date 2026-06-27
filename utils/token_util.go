@@ -22,10 +22,35 @@ type SignedDetails struct {
 	jwt.RegisteredClaims
 }
 
-var SECRET_KEY string = os.Getenv("SECRET_KEY")
-var SECRET_REFRESH_KEY string = os.Getenv("SECRET_REFRESH_KEY")
+func getSecretKey() (string, error) {
+	secretKey := os.Getenv("SECRET_KEY")
+	if secretKey == "" {
+		return "", errors.New("SECRET_KEY is not configured")
+	}
+
+	return secretKey, nil
+}
+
+func getRefreshSecretKey() (string, error) {
+	refreshSecretKey := os.Getenv("SECRET_REFRESH_KEY")
+	if refreshSecretKey == "" {
+		return "", errors.New("SECRET_REFRESH_KEY is not configured")
+	}
+
+	return refreshSecretKey, nil
+}
 
 func GernerateAllTokens(userId uuid.UUID, UserName, email, FullName, Role string) (string, string, error) {
+	secretKey, err := getSecretKey()
+	if err != nil {
+		return "", "", err
+	}
+
+	refreshSecretKey, err := getRefreshSecretKey()
+	if err != nil {
+		return "", "", err
+	}
+
 	claims := &SignedDetails{
 		UserId:   userId,
 		Email:    email,
@@ -40,7 +65,7 @@ func GernerateAllTokens(userId uuid.UUID, UserName, email, FullName, Role string
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signedToken, err := token.SignedString([]byte(SECRET_KEY))
+	signedToken, err := token.SignedString([]byte(secretKey))
 
 	if err != nil {
 		return "", "", err
@@ -60,7 +85,7 @@ func GernerateAllTokens(userId uuid.UUID, UserName, email, FullName, Role string
 	}
 
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshclaims)
-	signedrefreshToken, err := refreshToken.SignedString([]byte(SECRET_REFRESH_KEY))
+	signedrefreshToken, err := refreshToken.SignedString([]byte(refreshSecretKey))
 
 	if err != nil {
 		return "", "", err
@@ -109,10 +134,15 @@ func GetAccessToken(c *fiber.Ctx) (string, error) {
 }
 
 func ValidateToken(tokenstring string) (*SignedDetails, error) {
+	secretKey, err := getSecretKey()
+	if err != nil {
+		return nil, err
+	}
+
 	claims := &SignedDetails{}
 
 	token, err := jwt.ParseWithClaims(tokenstring, claims, func(t *jwt.Token) (any, error) {
-		return []byte(SECRET_KEY), nil
+		return []byte(secretKey), nil
 	})
 
 	if err != nil {
