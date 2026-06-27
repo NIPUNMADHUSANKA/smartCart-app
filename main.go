@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"smartCart-app/database"
 	"smartCart-app/routes"
 
@@ -41,7 +42,9 @@ func main() {
 		})
 	})
 
-	if err := router.Listen(":8080"); err != nil {
+	port := os.Getenv("PORT")
+
+	if err := router.Listen(":" + port); err != nil {
 		log.Fatal("Failed to Start Server", err)
 	}
 }
