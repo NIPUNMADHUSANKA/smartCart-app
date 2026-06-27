@@ -45,7 +45,7 @@ const (
 type ShoppingItem struct {
 	ItemId      uuid.UUID      `json:"itemId" validate:"required"`
 	ItemName    string         `json:"itemName" validate:"required"`
-	Description string         `json:"description" validate:"required,min=2,max=500"`
+	Description string         `json:"description" validate:"min=0,max=500"`
 	Status      ItemStatus     `json:"status" validate:"oneof=active archived"`
 	CategoryId  string         `json:"categoryId" validate:"required"`
 	Priority    PriorityStatus `json:"priority" validate:"oneof=normal low medium high"`

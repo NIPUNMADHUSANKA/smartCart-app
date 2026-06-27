@@ -21,13 +21,11 @@ func SetupProtectedRoutes(router *fiber.App) {
 	api.Get("auth/me", controllers.GetUserInfo())
 	api.Get("auth/info", controllers.GetUserDetails())
 	api.Patch("auth/resetPassword", controllers.ResetPassword())
-
-	//16
 	api.Delete("auth/remove", controllers.DeleteUser())
 
 	api.Get("shopping-item", controllers.GetShoppingItems())
 	api.Get("shopping-item/:itemId", controllers.GetShoppingItemByItemId())
-	api.Get("shopping-item/:categoryId", controllers.GetShoppingItemByCategoryId())
+	api.Get("shopping-item/findByCategory/:categoryId", controllers.GetShoppingItemByCategoryId())
 	api.Delete("shopping-item/:itemId", controllers.DeleteShoppingItemByItemId())
 	api.Post("shopping-item", controllers.CreateShoppingItems())
 	api.Patch("shopping-item/:itemId", controllers.UpdateShoppingItem())
@@ -36,9 +34,9 @@ func SetupProtectedRoutes(router *fiber.App) {
 	api.Delete("ai-model/:categoryId", controllers.DeleteAICategory())
 	api.Delete("ai-model/deleteAISuggestion/:suggestionId", controllers.DeleteAISuggestion())
 	api.Delete("ai-model/deleteAIShoppingItem/:categoryId/:itemId", controllers.DeleteAIShoppingItem())
-	api.Post("ai-model/updateAIShoppingItem", controllers.UpdateAIShoppingItem())
-	api.Post("ai-model/confirmAIShopping", controllers.ConfirmAICategory())
+	api.Patch("ai-model/updateAIShoppingItem", controllers.UpdateAIShoppingItem())
 	api.Post("ai-model/addAIShoppingItem", controllers.AddAIShoppingItem())
+	api.Post("ai-model/confirmAIShopping", controllers.ConfirmAICategory())
 	api.Post("ai-model", controllers.GenetateAIPrompt())
-	api.Post("ai-model/regenerateAIShopping/:suggestionId", controllers.ReGenetateAIPrompt())
+	api.Post("ai-model/regenerateAIShopping", controllers.ReGenetateAIPrompt())
 }

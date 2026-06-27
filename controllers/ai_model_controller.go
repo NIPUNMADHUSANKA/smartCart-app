@@ -78,7 +78,7 @@ func GetAllAICategory() fiber.Handler {
 				// fetch items for this category
 				itemRows, err := database.DBPool.Query(
 					ctx,
-					`SELECT i."id", i."categoryId", i."itemName", i."quantity", i."unit", i."priority"
+					`SELECT i."id", i."categoryId", i."itemName", i."quantity", i."unit", COALESCE(i."priority", 'normal')
 					FROM "AIItem" i
 					WHERE i."categoryId" = $1`,
 					cat.Id,
@@ -223,7 +223,8 @@ func DeleteAIShoppingItem() fiber.Handler {
 			AND i."categoryId" = c."id"
 			AND c."suggestionId" = s."id"
 			AND s."userId" = $3
-			RETURNING i."id", i."categoryId", i."itemName", i."quantity", i."unit", i."priority"`,
+			RETURNING i."id", i."categoryId", i."itemName", i."quantity", i."unit", COALESCE(i."priority", 'normal')`,
+
 			itemId,
 			categoryId,
 			userId,
@@ -254,13 +255,15 @@ func AddAIShoppingItem() fiber.Handler {
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 		defer cancel()
 
-		var AIItem models.AIItem
+		var AIItem models.AIItemRec
 
 		if err := c.BodyParser(&AIItem); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Invalid input data",
 			})
 		}
+
+		AIItem.Priority = models.PriorityStatusMedium
 
 		if err := validate.Struct(AIItem); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -273,7 +276,7 @@ func AddAIShoppingItem() fiber.Handler {
 
 		err := database.DBPool.QueryRow(
 			ctx,
-			`INSERT INTO "AIItem" ("Id", "CategoryId", "ItemName", "quantity", "unit", "priority")
+			`INSERT INTO "AIItem" ("id", "categoryId", "itemName", "quantity", "unit", "priority")
 			VALUES($1, $2, $3, $4, $5, $6)
 			RETURNING "id"`,
 			AIItem.Id, AIItem.CategoryId, AIItem.ItemName, AIItem.Quantity, AIItem.Unit, AIItem.Priority,
@@ -285,7 +288,16 @@ func AddAIShoppingItem() fiber.Handler {
 			})
 		}
 
-		return c.Status(fiber.StatusCreated).JSON(AIItem)
+		var Response models.AIItem = models.AIItem{
+			Id:         AIItem.Id,
+			CategoryId: AIItem.CategoryId,
+			ItemName:   AIItem.ItemName,
+			Quantity:   AIItem.Quantity,
+			Unit:       AIItem.Unit,
+			Priority:   AIItem.Priority,
+		}
+
+		return c.Status(fiber.StatusCreated).JSON(Response)
 	}
 }
 
@@ -300,11 +312,13 @@ func UpdateAIShoppingItem() fiber.Handler {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "userId is not found"})
 		}
 
-		var payload models.AIItem
+		var payload models.AIItemRec
 
 		if err := c.BodyParser(&payload); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input data"})
 		}
+
+		payload.Priority = models.PriorityStatusMedium
 
 		if err := validate.Struct(payload); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Validation Failed", "details": err.Error()})
@@ -324,7 +338,8 @@ func UpdateAIShoppingItem() fiber.Handler {
 			AND i."categoryId" = $6
 			AND i."categoryId" = c."id"
 			AND s."userId" = $7
-			RETURNING i."id", i."categoryId", i."itemName", i."quantity", i."unit", i."priority"`,
+			RETURNING i."id", i."categoryId", i."itemName", i."quantity", i."unit", COALESCE(i."priority", 'normal')`,
+
 			payload.ItemName,
 			payload.Quantity,
 			payload.Unit,
@@ -363,7 +378,7 @@ func ConfirmAICategory() fiber.Handler {
 		}
 
 		var payload struct {
-			CategoryId string `json:"categoryId" validate:"required,uuid4"`
+			CategoryId string `json:"cateId" validate:"required,uuid4"`
 		}
 
 		if err := c.BodyParser(&payload); err != nil {
@@ -378,7 +393,7 @@ func ConfirmAICategory() fiber.Handler {
 
 		// Fetch AICategory and AIItems
 		var aiCat models.AICategory
-		var suggestionId uuid.UUID
+		var suggestionId string
 
 		err = tx.QueryRow(ctx,
 			`SELECT c."id", c."suggestionId", c."categoryName", c."priority"
@@ -393,14 +408,14 @@ func ConfirmAICategory() fiber.Handler {
 
 		if err != nil {
 			if err == pgx.ErrNoRows {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "AI category not found"})
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
 			}
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch AI category"})
 		}
 
 		// Fetch AIItems for this category
 		itemRows, err := tx.Query(ctx,
-			`SELECT "id", "categoryId", "itemName", "quantity", "unit", "priority"
+			`SELECT "id", "categoryId", "itemName", "quantity", "unit", COALESCE("priority", 'normal')
 			FROM "AIItem"
 			WHERE "categoryId" = $1`,
 			payload.CategoryId,
@@ -504,9 +519,9 @@ func ConfirmAICategory() fiber.Handler {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to commit confirmation"})
 		}
 
-		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-			"message": "AI category confirmed and saved successfully",
-		})
+		aiCat.SuggestionId = suggestionId
+
+		return c.Status(fiber.StatusCreated).JSON(aiCat)
 	}
 }
 
@@ -533,12 +548,12 @@ func GenetateAIPrompt() fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Validation Failed", "details": err.Error()})
 		}
 
-		err := utils.GenerateAI(ctx, payload.Prompt, userId)
+		suggestion, err := utils.GenerateAI(ctx, payload.Prompt, userId)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "AI prompt generated"})
+		return c.Status(fiber.StatusCreated).JSON(suggestion)
 	}
 }
 
@@ -621,16 +636,79 @@ func DeleteAISuggestion() fiber.Handler {
 
 func ReGenetateAIPrompt() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// First call the DeleteAISuggestion handler
-		if err := DeleteAISuggestion()(c); err != nil {
-			return err
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
+
+		userIdInterface := c.Locals("userId")
+		userId, ok := userIdInterface.(string)
+		if !ok || userId == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "userId is not found"})
 		}
 
-		// Then call the GenetateAIPrompt handler
-		if err := GenetateAIPrompt()(c); err != nil {
-			return err
+		var payload struct {
+			Prompt       string `json:"prompt" validate:"required"`
+			SuggestionId string `json:"suggestionId" validate:"required"`
 		}
 
-		return nil
+		if err := c.BodyParser(&payload); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input data"})
+		}
+		if err := validate.Struct(payload); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Validation Failed", "details": err.Error()})
+		}
+
+		oldSuggestionId := payload.SuggestionId
+		if oldSuggestionId == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "suggestionId is not found"})
+		}
+
+		// Delete old suggestion in a transaction
+		tx, err := database.DBPool.Begin(ctx)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to start transaction"})
+		}
+		defer tx.Rollback(ctx)
+
+		_, err = tx.Exec(ctx,
+			`DELETE FROM "AIItem"
+			WHERE "categoryId" IN (
+				SELECT "id" FROM "AICategory" WHERE "suggestionId" = $1
+			)`,
+			oldSuggestionId,
+		)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete AI items"})
+		}
+
+		_, err = tx.Exec(ctx,
+			`DELETE FROM "AICategory" WHERE "suggestionId" = $1`,
+			oldSuggestionId,
+		)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete AI categories"})
+		}
+
+		res, err := tx.Exec(ctx,
+			`DELETE FROM "AiSuggestion" WHERE "id" = $1 AND "userId" = $2`,
+			oldSuggestionId, userId,
+		)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete AI suggestion"})
+		}
+		if res.RowsAffected() == 0 {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "AI suggestion not found"})
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete old suggestion"})
+		}
+
+		// Generate new suggestion
+		suggestion, err := utils.GenerateAI(ctx, payload.Prompt, userId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		return c.Status(fiber.StatusCreated).JSON(suggestion)
 	}
 }

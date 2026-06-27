@@ -389,9 +389,9 @@ func DeleteUser() fiber.Handler {
 		// Delete shopping items concurrently
 		go func() {
 			_, err := database.DBPool.Exec(ctx,
-				`DELETE FROM "shoppingItem" si
+				`DELETE FROM "ShoppingItem" si
 				USING "Category" c
-				WHERE si."CategoryId" = c."categoryId"
+				WHERE si."categoryId" = c."categoryId"
 				AND c."userId" = $1`,
 				userIdStr,
 			)

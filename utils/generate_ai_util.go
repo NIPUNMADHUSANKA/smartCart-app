@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"smartCart-app/database"
 	"smartCart-app/models"
@@ -35,7 +36,6 @@ type aiGeneratedPayload struct {
 	ShoppingList []aiGeneratedItem `json:"shopping_list"`
 }
 
-var OPEN_API_KEY string = os.Getenv("OPENAI_API_KEY")
 var MODEL_NAME = openai.ChatModelGPT4_1Mini
 
 func generateAIPrompt(userPrompt string) *ChatMessage {
@@ -171,21 +171,23 @@ func normalizeUnit(unit string) models.UnitStatus {
 	}
 }
 
-func saveAIGeneratedData(ctx context.Context, userId string, payload *aiGeneratedPayload) error {
+func saveAIGeneratedData(ctx context.Context, userId string, payload *aiGeneratedPayload) (*models.AiSuggestion, error) {
 	tx, err := database.DBPool.Begin(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
 	suggestionId := uuid.New()
+	now := time.Now()
+
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO "AiSuggestion" ("id", "userId", "prompt") VALUES ($1, $2, $3)`,
 		suggestionId,
 		userId,
 		payload.Prompt,
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	categoryId := uuid.New()
@@ -196,17 +198,18 @@ func saveAIGeneratedData(ctx context.Context, userId string, payload *aiGenerate
 		payload.Category,
 		models.PriorityStatusNormal,
 	); err != nil {
-		return err
+		return nil, err
 	}
 
+	var aiItems []models.AIItem
 	for _, item := range payload.ShoppingList {
 		quantity, err := parseQuantity(item.Quantity)
 		if err != nil {
-			return fmt.Errorf("invalid quantity for item %q: %w", item.Item, err)
+			return nil, fmt.Errorf("invalid quantity for item %q: %w", item.Item, err)
 		}
 
 		if item.Item == "" {
-			return errors.New("AI response contains an item with empty name")
+			return nil, errors.New("AI response contains an item with empty name")
 		}
 
 		unit := normalizeUnit(item.Unit)
@@ -220,44 +223,72 @@ func saveAIGeneratedData(ctx context.Context, userId string, payload *aiGenerate
 			unit,
 			models.PriorityStatusNormal,
 		); err != nil {
-			return err
+			return nil, err
 		}
+
+		aiItems = append(aiItems, models.AIItem{
+			Id:         itemId,
+			CategoryId: categoryId.String(),
+			ItemName:   item.Item,
+			Quantity:   quantity,
+			Unit:       unit,
+			Priority:   models.PriorityStatusNormal,
+		})
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &models.AiSuggestion{
+		Id:        suggestionId,
+		UserId:    userId,
+		Prompt:    payload.Prompt,
+		CreatedAt: now,
+		Categories: []models.AICategory{
+			{
+				Id:           categoryId,
+				SuggestionId: suggestionId.String(),
+				CategoryName: payload.Category,
+				Priority:     models.PriorityStatusNormal,
+				Items:        aiItems,
+			},
+		},
+	}, nil
 }
 
-func processAIGenratedData(ctx context.Context, userId string, result []openai.ChatCompletionChoice) error {
+func processAIGenratedData(ctx context.Context, userId string, result []openai.ChatCompletionChoice) (*models.AiSuggestion, error) {
 	if len(result) == 0 {
-		return errors.New("no AI response returned")
+		return nil, errors.New("no AI response returned")
 	}
 
 	aiText := result[0].Message.Content
 	if aiText == "" {
-		return errors.New("AI response content is empty")
+		return nil, errors.New("AI response content is empty")
 	}
 
 	parsed, err := parseAIGeneratedData(aiText)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	return saveAIGeneratedData(ctx, userId, parsed)
 }
 
-func GenerateAI(ctx context.Context, userPrompt, userId string) error {
+func GenerateAI(ctx context.Context, userPrompt, userId string) (*models.AiSuggestion, error) {
 	ChatMessage := generateAIPrompt(userPrompt)
 
-	if OPEN_API_KEY == "" {
-		return errors.New("The OPENAI_API_KEY is not configured on the server")
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		return nil, errors.New("The OPENAI_API_KEY is not configured on the server")
 	}
 
 	if ChatMessage == nil {
-		return errors.New("prompt cannot be generated, please contact the system administrator")
+		return nil, errors.New("prompt cannot be generated, please contact the system administrator")
 	}
 
 	client := openai.NewClient(
-		option.WithAPIKey(OPEN_API_KEY),
+		option.WithAPIKey(apiKey),
 	)
 
 	resp, err := client.Chat.Completions.New(
@@ -271,7 +302,17 @@ func GenerateAI(ctx context.Context, userPrompt, userId string) error {
 	)
 
 	if err != nil {
-		return err
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "insufficient_quota") {
+			return nil, errors.New("OpenAI quota exceeded: please add credits at https://platform.openai.com/settings/billing")
+		}
+		if strings.Contains(errMsg, "429") {
+			return nil, errors.New("OpenAI rate limit reached: too many requests, please try again later")
+		}
+		if strings.Contains(errMsg, "401") {
+			return nil, errors.New("OpenAI authentication failed: the API key is invalid or expired")
+		}
+		return nil, err
 	}
 
 	return processAIGenratedData(ctx, userId, resp.Choices)
