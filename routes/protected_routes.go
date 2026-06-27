@@ -8,6 +8,7 @@ import (
 )
 
 func SetupProtectedRoutes(router *fiber.App) {
+	router.Use(middleware.RateLimiting())
 	router.Use(middleware.AuthMiddlware())
 
 	api := router.Group("/api/smart-cart/")
