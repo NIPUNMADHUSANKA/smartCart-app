@@ -29,7 +29,7 @@ func main() {
 
 	router.Get("/", func(c *fiber.Ctx) error {
 		return c.Status(200).JSON(fiber.Map{
-			"message": "Hello, World!",
+			"message": "Smart Cart Application is running",
 		})
 	})
 
